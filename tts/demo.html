@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gemini TTS Server Test UI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<style>
+    body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #f0f2f5;
+        color: #333;
+    }
+
+    .container {
+        max-width: 1200px;
+        margin: auto;
+        padding: 20px;
+    }
+
+    h1 {
+        margin-bottom: 0;
+    }
+
+    .header p {
+        margin-top: 5px;
+        color: #555;
+    }
+
+    .content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .section-title {
+        margin-bottom: 10px;
+        font-size: 1.2em;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    label {
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    input, textarea, button {
+        padding: 10px;
+        font-size: 1em;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+    }
+
+    textarea {
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    .btn {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: 0.3s;
+        margin-top: 5px;
+    }
+
+    .btn:hover {
+        background-color: #0056b3;
+    }
+
+    .control-btn {
+        margin-right: 5px;
+        margin-bottom: 5px;
+        cursor: pointer;
+    }
+
+    .connection-status {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .connection-status .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 5px;
+        background-color: red;
+    }
+
+    .status-connected .status-dot {
+        background-color: green;
+    }
+
+    .status-connecting .status-dot {
+        background-color: orange;
+    }
+
+    .conversation-history, .transcription-box, .log-box {
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 10px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .conversation-turn.user {
+        text-align: right;
+        margin-bottom: 5px;
+    }
+
+    .conversation-turn.assistant {
+        text-align: left;
+        margin-bottom: 5px;
+    }
+
+    .audio-controls {
+        margin-bottom: 10px;
+    }
+
+    #startSpeechBtn {
+        background-color: #28a745;
+        margin-top: 5px;
+    }
+
+    #startSpeechBtn.active {
+        background-color: #dc3545;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🎤 Gemini TTS Server Test UI</h1>
+        <p>Real-time voice interaction testing interface</p>
+    </div>
+
+    <div class="content">
+        <!-- Input Section -->
+        <div>
+            <h2 class="section-title">⚙️ Configuration & Input</h2>
+            
+            <div class="connection-status" id="connectionStatus">
+                <div class="status-dot"></div>
+                <span>Disconnected</span>
+            </div>
+
+            <div class="form-group">
+                <label for="serverUrl">Server URL:</label>
+                <input type="text" id="serverUrl" value="http://localhost:8080">
+            </div>
+            <button class="btn" id="connectBtn" onclick="toggleConnection()">Connect to Server</button>
+
+            <div class="form-group">
+                <label for="message">Message:</label>
+                <textarea id="message" placeholder="Enter your message here..."></textarea>
+                <button class="btn" id="startSpeechBtn" onclick="toggleSpeechRecognition()">🎙️ Start/Stop Speech</button>
+            </div>
+
+            <div class="form-group">
+                <label for="questions">Questions (one per line):</label>
+                <textarea id="questions" placeholder="Enter questions separated by new lines..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="sessionHandle">Session Handle (optional):</label>
+                <input type="text" id="sessionHandle" placeholder="Leave empty for new session">
+            </div>
+
+            <button class="btn" id="sendBtn" onclick="sendTTSRequest()" disabled>Send TTS Request</button>
+
+            <div class="form-group">
+                <label>Conversation History:</label>
+                <div class="conversation-history" id="conversationHistory">
+                    <div class="conversation-placeholder">No conversation history yet. Start a conversation!</div>
+                </div>
+                <button class="control-btn" onclick="clearHistory()">🗑️ Clear History</button>
+            </div>
+        </div>
+
+        <!-- Output Section -->
+        <div>
+            <h2 class="section-title">🎵 Audio & Transcription</h2>
+
+            <div class="audio-controls">
+                <button class="control-btn" id="playBtn" onclick="togglePlayback()">▶️ Play</button>
+                <button class="control-btn" id="pauseBtn" onclick="pausePlayback()">⏸️ Pause</button>
+                <button class="control-btn" id="stopBtn" onclick="stopPlayback()">⏹️ Stop</button>
+                <button class="control-btn" id="clearBtn" onclick="clearAll()">🗑️ Clear</button>
+            </div>
+
+            <div class="audio-visualizer" id="audioVisualizer">
+                🎵 Audio will play here
+            </div>
+
+            <div class="form-group">
+                <label>Real-time Transcription:</label>
+                <div class="transcription-box" id="transcriptionBox">
+                    Transcription will appear here...
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>System Logs:</label>
+                <div class="log-box" id="logBox">
+                    <div class="log-entry">
+                        <span class="log-timestamp">[System]</span>
+                        <span class="log-info">Ready to connect...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="scripts.js"></script>
+</body>
+</html>
